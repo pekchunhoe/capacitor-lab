@@ -1,10 +1,11 @@
 import { rcState, type RCParameters, type Segment } from './physics';
 
 // Presentation units only: SVG units per simulated second, not carrier drift speed.
-// At 5× playback, even the existing 0.1 s frame-stall cap plus one pending
-// 30 Hz commit advances less than half a marker spacing (avoids strobing).
 export const MAX_CURRENT_SPEED = 88;
+// Density is independent of phase and velocity. Retain the calibrated layout
+// as a reference and subdivide each path's spacing into four equal parts.
 export const CURRENT_MARKER_SPACING = 120;
+export const CURRENT_PARTICLE_DENSITY = 4;
 export const CURRENT_STOP = 1e-9;
 // A fixed reference for the entire parameter trial, not the decaying current
 // or the charge at the latest switch. Partial-charge switches retain their scale.
@@ -54,6 +55,12 @@ export const CURRENT_PATHS = {
   shunt: wire([[160, 250], [160, 105], [200, 105], [250, 65]]),
 } as const;
 export type CurrentPath = keyof typeof CURRENT_PATHS;
+// Allocate the fixed layout once, not on each simulation update. React retains
+// each path/index identity; only coordinates and endpoint fading change.
+const markerOffsets = Object.fromEntries(Object.entries(CURRENT_PATHS).map(([name, path]) => {
+  const count = Math.max(1, Math.floor(path.length / CURRENT_MARKER_SPACING)) * CURRENT_PARTICLE_DENSITY;
+  return [name, Object.freeze(Array.from({ length: count }, (_, index) => (index + .5) * path.length / count))];
+})) as Record<CurrentPath, readonly number[]>;
 export function activeCurrentPaths(charging: boolean): CurrentPath[] {
   return charging ? ['upper', 'lower', 'supply', 'return'] : ['upper', 'lower', 'shunt'];
 }
@@ -74,9 +81,9 @@ export function pointOnCurrentPath(name: CurrentPath, distance: number) {
   throw new Error('A current path requires a conducting segment.');
 }
 export function currentMarkers(name: CurrentPath, phase: number) {
-  const length = CURRENT_PATHS[name].length, count = Math.max(1, Math.floor(length / CURRENT_MARKER_SPACING));
-  return Array.from({ length: count }, (_, index) => {
-    const distance = wrapDistance((index + .5) * length / count + phase, length);
+  const length = CURRENT_PATHS[name].length;
+  return markerOffsets[name].map(offset => {
+    const distance = wrapDistance(offset + phase, length);
     return { ...pointOnCurrentPath(name, distance), distance,
       // Drawn path endpoints fade, rather than implying transport across the gap.
       opacity: Math.min(1, distance / 10, (length - distance) / 10) * .95 };

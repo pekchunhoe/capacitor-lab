@@ -159,7 +159,7 @@ export function RCCircuit({ p, v, i, charging, running, time, phase, hiddenC = f
       })}
     </g>
     <text x="350" y="285" textAnchor="middle" className="svg-label">Conventional current {direction > 0 ? 'clockwise →' : direction < 0 ? 'reverses ←' : 'zero · markers stationary'} · insulating gap carries no free current</text>
-    <text x="350" y="302" textAnchor="middle" className="svg-label">Marker speed shows current relative to the circuit’s maximum.</text>
+    <text x="350" y="302" textAnchor="middle" className="svg-label">Particle count is illustrative · speed shows relative current.</text>
   </svg>;
 }
 

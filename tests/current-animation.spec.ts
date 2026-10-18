@@ -30,7 +30,22 @@ async function snapshot(page: Page) {
   });
 }
 type Snapshot = Awaited<ReturnType<typeof snapshot>>;
+function checkDensity(state: Snapshot) {
+  const expected: Record<string, number> = { upper: 12, lower: 12, supply: 4, return: 4, shunt: 8 };
+  expect(state.paths.reduce((count, path) => count + path.markers.length, 0)).toBe(32);
+  for (const path of state.paths) {
+    expect(path.markers).toHaveLength(expected[path.name!]);
+    const sorted = path.markers.map(marker => marker.distance).sort((a, b) => a - b);
+    const spacing = path.length / sorted.length;
+    expect(spacing * state.svgScale).toBeGreaterThan(12);
+    sorted.forEach((distance, index) => {
+      const next = sorted[(index + 1) % sorted.length];
+      expect(((next - distance) % path.length + path.length) % path.length).toBeCloseTo(spacing, 3);
+    });
+  }
+}
 function checkSync(state: Snapshot, direction: number, peakCurrent = .0012) {
+  checkDensity(state);
   expect(state.animations).toBe(0); expect(state.direction).toBe(direction);
   expect(Math.sign(state.current)).toBe(direction); expect(Math.sign(state.speed)).toBe(direction);
   expect(state.speed).toBeCloseTo(88 * state.current / peakCurrent, 9);
@@ -65,7 +80,7 @@ function movement(previous: Snapshot, next: Snapshot, direction: number) {
   return wraps;
 }
 
-for (const [width, height] of [[320, 640], [390, 844], [834, 1194], [1194, 834], [1440, 1000]]) {
+for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [834, 1194], [1194, 834], [1440, 1000]]) {
   test(`controlled charging frames keep direction, slow smoothly and match graphs at ${width}px`, async ({ page }, testInfo) => {
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -160,6 +175,7 @@ test('zero current and reduced motion keep stationary markers with accurate sign
   await setup(page); const rc = panel(page);
   await rc.getByRole('button', { name: 'Discharge', exact: true }).click();
   const zero = await snapshot(page); expect(zero.current).toBe(0); expect(zero.speed).toBe(0);
+  checkDensity(zero);
   await page.clock.runFor(700); const next = await snapshot(page);
   expect(next.paths).toEqual(zero.paths); expect(next.phase).toBe(zero.phase);
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -189,7 +205,35 @@ test('variable frame delivery and stalls do not reverse markers at maximum curre
     await page.clock.fastForward(gap); const after = await snapshot(page);
     checkSync(after, 1, .024); movement(before, after, 1);
     expect(after.current).toBeCloseTo(.024 * Math.exp(-after.time / .5), 12);
-    for (const path of after.paths) expect(after.phase - before.phase).toBeLessThan(path.length / path.markers.length / 2);
+    // Dense particles retain their identities across missed frames. Their
+    // signed displacement, checked by movement(), is not a nearest-dot match.
+    for (const path of after.paths) expect(after.phase - before.phase).toBeLessThan(path.length / 2);
     before = after;
   }
+});
+
+test('dense particles reuse DOM nodes through decay, equilibrium, pause and resume', async ({ page }) => {
+  await setup(page); const rc = panel(page);
+  await rc.getByRole('button', { name: 'Charge', exact: true }).click();
+  const identities = await rc.locator('.current-flow').evaluateHandle(flow => [...flow.querySelectorAll('.current-particle')]);
+  try {
+    let before = await snapshot(page);
+    for (const interval of [250, 750, 2000, 2000, 2000]) {
+      await page.clock.runFor(interval); const after = await snapshot(page);
+      checkSync(after, 1); movement(before, after, 1);
+      expect(await identities.evaluate(nodes => nodes.length === 32 && nodes.every(node => node.isConnected))).toBe(true);
+      before = after;
+    }
+    expect(Math.abs(before.speed)).toBeLessThan(.1);
+    await rc.getByRole('button', { name: 'Pause', exact: true }).click();
+    const paused = await snapshot(page); await page.clock.runFor(500);
+    expect(await snapshot(page)).toEqual(paused);
+    await rc.getByRole('button', { name: 'Resume', exact: true }).click();
+    expect((await snapshot(page)).paths).toEqual(paused.paths);
+    await page.clock.runFor(2000);
+    const equilibrium = await snapshot(page);
+    checkDensity(equilibrium); expect(equilibrium.time).toBe(8); expect(equilibrium.motionSpeed).toBe(0);
+    expect(await identities.evaluate(nodes => nodes.every(node => node.isConnected))).toBe(true);
+    await page.clock.runFor(500); expect(await snapshot(page)).toEqual(equilibrium);
+  } finally { await identities.dispose(); }
 });

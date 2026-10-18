@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rcState, sampleRC, transition } from './physics';
-import { activeCurrentPaths, CURRENT_PATHS, CURRENT_STOP, CURRENT_MARKER_SPACING, MAX_CURRENT_SPEED, currentMarkers, currentPhase, currentReference, currentVisualSpeed, pointOnCurrentPath, wrapDistance } from './currentMotion';
+import { activeCurrentPaths, CURRENT_PATHS, CURRENT_STOP, CURRENT_MARKER_SPACING, CURRENT_PARTICLE_DENSITY, MAX_CURRENT_SPEED, currentMarkers, currentPhase, currentReference, currentVisualSpeed, pointOnCurrentPath, wrapDistance } from './currentMotion';
 
 const p = { r: 1e4, c: 100e-6, source: 12 };
 const charge = [{ start: 0, initial: 0, target: 12 }];
@@ -103,6 +103,48 @@ describe('current-driven visual phase', () => {
 });
 
 describe('conducting paths and signed wrapping', () => {
+  it('quadruples the actual eight-marker baseline in both conducting modes', () => {
+    expect(CURRENT_PARTICLE_DENSITY).toBe(4);
+    for (const charging of [true, false]) {
+      const count = activeCurrentPaths(charging).reduce((sum, path) => sum + currentMarkers(path, 0).length, 0);
+      expect(count).toBe(32);
+    }
+    for (const name of Object.keys(CURRENT_PATHS) as (keyof typeof CURRENT_PATHS)[]) {
+      const baseline = Math.max(1, Math.floor(CURRENT_PATHS[name].length / CURRENT_MARKER_SPACING));
+      expect(currentMarkers(name, 0)).toHaveLength(baseline * 4);
+    }
+  });
+  it('keeps equal arc-length spacing including the seam, for either signed phase', () => {
+    for (const name of Object.keys(CURRENT_PATHS) as (keyof typeof CURRENT_PATHS)[]) {
+      const length = CURRENT_PATHS[name].length;
+      for (const phase of [-1000, -1, 0, 1, 1000]) {
+        const markers = currentMarkers(name, phase).sort((a, b) => a.distance - b.distance);
+        const spacing = length / markers.length;
+        expect(spacing).toBeGreaterThan(29); // More than five particle diameters.
+        markers.forEach((marker, index) => {
+          expect(wrapDistance(markers[(index + 1) % markers.length].distance - marker.distance, length)).toBeCloseTo(spacing, 10);
+        });
+      }
+    }
+  });
+  it('moves every dense marker at the unchanged integrated speed and retains them near equilibrium', () => {
+    for (const segments of [charge, [{ start: 0, initial: 12, target: 0 }]]) {
+      for (const time of [0, .25, 1, 3, 5, 8, 50]) {
+        const delta = currentPhase(p, segments, time + .001) - currentPhase(p, segments, time);
+        for (const name of activeCurrentPaths(segments[0].target !== 0)) {
+          const before = currentMarkers(name, currentPhase(p, segments, time));
+          const after = currentMarkers(name, currentPhase(p, segments, time + .001));
+          expect(after).toHaveLength(before.length);
+          after.forEach((marker, index) => {
+            const length = CURRENT_PATHS[name].length;
+            const displacement = wrapDistance(marker.distance - before[index].distance + length / 2, length) - length / 2;
+            expect(displacement).toBeCloseTo(delta, 10);
+          });
+        }
+      }
+    }
+    expect(currentPhase(p, charge, .2)).toBeCloseTo(88 * (1 - Math.exp(-.2)), 12);
+  });
   it('uses the shunt instead of the disconnected battery branch during discharge', () => {
     expect(activeCurrentPaths(true)).toEqual(['upper', 'lower', 'supply', 'return']);
     expect(activeCurrentPaths(false)).toEqual(['upper', 'lower', 'shunt']);
@@ -126,11 +168,14 @@ describe('conducting paths and signed wrapping', () => {
       });
     }
   });
-  it('bounds travel below half a marker spacing even with 5× playback and a capped frame stall', () => {
-    const maxStep = MAX_CURRENT_SPEED * 5 * (.1 + 1 / 30);
-    for (const path of Object.values(CURRENT_PATHS)) {
-      const spacing = path.length / Math.max(1, Math.floor(path.length / CURRENT_MARKER_SPACING));
+  it('bounds normal-playback stalled travel below half the dense spacing and 5× travel below half a path', () => {
+    const maxStep = MAX_CURRENT_SPEED * (.1 + 1 / 30);
+    for (const name of Object.keys(CURRENT_PATHS) as (keyof typeof CURRENT_PATHS)[]) {
+      const length = CURRENT_PATHS[name].length, spacing = length / currentMarkers(name, 0).length;
       expect(maxStep).toBeLessThan(spacing / 2);
+      // At 5×, missing frames can span several dense spacings. Track stable
+      // identities and signed phase, rather than relabeling the nearest dot.
+      expect(maxStep * 5).toBeLessThan(length / 2);
     }
   });
 });
