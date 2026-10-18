@@ -12,3 +12,33 @@
 @media(max-width:480px){.graph .tick{font-size:18px}.graph .tau-label{font-size:16px}}
 @media(pointer:coarse){input[type=range]{height:44px}.number-unit input{min-height:44px!important}.choice-group button{min-height:44px}.icon-button{width:44px;height:44px;min-height:44px}}
 @media(pointer:coarse){button,select,input[type=number]{min-height:44px!important}}
+
+/* Local KaTeX fonts and responsive textbook notation. Keep overflow within math. */
+.equation,.equation-library,.worked-solution,.activity-body,.time-constant>div{min-width:0;max-width:100%}
+.equation{padding:20px 18px;border:1px solid #31474e;border-left:3px solid #548c80;border-radius:8px;background:#10202266}
+.equation .formula{font:inherit;margin:12px 0;letter-spacing:normal}
+.display-math{max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;padding:12px 4px;margin:8px 0;color:#def6ed;font-size:21px;line-height:1.5;scrollbar-width:thin;scrollbar-color:#52756d #111b2b}
+.display-math:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:4px}
+.display-math .katex-display{margin:0;text-align:left}
+.display-math .katex-display>.katex{text-align:left;white-space:nowrap}
+.katex{font-size:1em;letter-spacing:normal;text-indent:0}
+.inline-math{line-height:1.8}
+.inline-math .katex{white-space:normal}
+.inline-math .katex .base{white-space:nowrap}
+.equation p,.equation-explanation p,.model-notes p,.learning-summary p,.experiment-explanation{font-size:14px;line-height:1.85;overflow-wrap:break-word}
+.equation-explanation{margin-top:14px;color:#b7c8d8}
+.equation-explanation summary{font-size:14px;cursor:pointer;padding:7px 0}
+.equation-explanation p{margin-top:8px}
+.equation-library h3{margin:23px 0 10px;font-size:16px;color:#cfeade}
+.equation-library .display-math{padding:14px 4px}
+.time-constant{flex-wrap:wrap}
+.time-constant>div{flex:1 1 240px}
+.time-constant>p{flex:2 1 270px;font-size:14px;line-height:1.8}
+.time-constant .display-math{margin-bottom:0}
+.worked-solution .display-math{font-size:20px}
+.worked-solution p,.challenge-hint{font-size:14px;line-height:1.85}
+.experiment-explanation{margin:10px 0 18px;color:#a7b8cc}
+.energy-check{gap:10px;flex-wrap:wrap}
+.energy-check>span{min-width:70px;line-height:1.8}
+.math-fallback{font:inherit;color:#c0cbd8}
+@media(max-width:480px){.equation{padding:17px 12px}.display-math{font-size:20px;padding:14px 2px}.equation p,.equation-explanation p,.model-notes p,.learning-summary p,.procedure,.experiment-explanation{font-size:14px}.equation .eyebrow{font-size:9px}.worked-solution{padding:12px 8px}.worked-solution .display-math{font-size:20px}.time-constant>div,.time-constant>p{flex-basis:auto}.virtual-lab>.display-math{margin-top:15px}.activity-body{width:100%}}

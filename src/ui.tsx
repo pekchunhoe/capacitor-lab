@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { format, sampleRC, timeConstant, type RCParameters, type Segment } from './physics';
+import { DisplayMath, InlineMath, MathText } from './math';
 
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -15,7 +16,7 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.capacitor}</svg>;
 }
-export function Field({ label, value, unit, min, max, step = 1, onChange, disabled = false }: { label: string; value: number; unit: string; min: number; max: number; step?: number; onChange: (n: number) => void; disabled?: boolean }) {
+export function Field({ label, value, unit, min, max, step = 1, onChange, disabled = false, displayLabel }: { label: string; displayLabel?: ReactNode; value: number; unit: string; min: number; max: number; step?: number; onChange: (n: number) => void; disabled?: boolean }) {
   const id = useId(); const [draft, setDraft] = useState(String(value)); const [error, setError] = useState('');
   useEffect(() => { setDraft(String(Number(value.toPrecision(8)))); setError(''); }, [value]);
   const update = (raw: string) => {
@@ -24,7 +25,7 @@ export function Field({ label, value, unit, min, max, step = 1, onChange, disabl
     setError(''); onChange(n);
   };
   return <div className="field">
-    <div className="field-heading"><label htmlFor={id}>{label}</label><div className="number-unit"><input id={id} type="number" inputMode="decimal" value={draft} min={min} max={max} step="any" disabled={disabled} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} onChange={e => update(e.target.value)} /><span>{unit}</span></div></div>
+    <div className="field-heading"><label htmlFor={id}>{displayLabel ?? label}</label><div className="number-unit"><input id={id} aria-label={label} type="number" inputMode="decimal" value={draft} min={min} max={max} step="any" disabled={disabled} aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} onChange={e => update(e.target.value)} /><span>{unit}</span></div></div>
     <input aria-label={`${label} slider`} type="range" min={min} max={max} step={step} value={value} disabled={disabled} onChange={e => { setError(''); onChange(Number(e.target.value)); }} />
     <div className="range-labels"><span>{min} {unit}</span><span>{max} {unit}</span></div>
     {error && <p className="error" id={`${id}-error`} role="alert">{error}</p>}
@@ -37,10 +38,10 @@ export function Toggle({ label, checked, onChange }: { label: string; checked: b
   return <label className="toggle"><span>{label}</span><input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} /><span className="toggle-track" aria-hidden="true" /></label>;
 }
 export function Readings({ values }: { values: { label: string; value: string; accent?: string }[] }) {
-  return <dl className="readings">{values.map(v => <div key={v.label} style={{ '--reading-accent': v.accent } as React.CSSProperties}><dt>{v.label}</dt><dd>{v.value}</dd></div>)}</dl>;
+  return <dl className="readings">{values.map(v => <div key={v.label} style={{ '--reading-accent': v.accent } as React.CSSProperties}><dt><MathText>{v.label}</MathText></dt><dd>{v.value}</dd></div>)}</dl>;
 }
-export function Equation({ children, note }: { children: ReactNode; note: ReactNode }) {
-  return <div className="equation"><div className="eyebrow">THE PHYSICS BEHIND IT</div><div className="formula">{children}</div><p>{note}</p></div>;
+export function Equation({ children, note, symbols }: { children: string | readonly string[]; note: ReactNode; symbols?: string }) {
+  return <section className="equation"><div className="eyebrow">THE PHYSICS BEHIND IT</div><div className="formula">{(typeof children === 'string' ? [children] : children).map((tex, i) => <DisplayMath key={i} tex={tex} />)}</div><p>{note}</p>{symbols && <details className="equation-explanation"><summary>Symbols & units</summary><p><MathText>{symbols}</MathText></p></details>}</section>;
 }
 export function Experiment({ title, subtitle, badge, children }: { title: string; subtitle: string; badge: string; children: ReactNode }) {
   const [expanded, setExpanded] = useState(false);
@@ -110,7 +111,7 @@ export function PlateScene({ fraction = 0, er = 1, chargeFraction = 0.6, fieldSt
     })}
     <path d={`M${right + 100} ${top}h10v${separation}h-10`} fill="none" stroke="#62738c" strokeDasharray="3 3" />
     <text x={right + 115} y={(top + bottom) / 2 + 5} className="svg-label">{conceptual ? 'gap' : `${gap} mm`}</text>
-    <text x="345" y="298" textAnchor="middle" className="svg-label">{fraction > 0 ? `Polarized dielectric · εr = ${er} · ${Math.round(fraction * 100)}% area filled` : 'Free charges stay on the conducting surfaces'}</text>
+    <text x="345" y="298" textAnchor="middle" className="svg-label">{fraction > 0 ? <>Polarized dielectric · ε<tspan baselineShift="sub" fontSize="9">r</tspan> = {er} · {Math.round(fraction * 100)}% area filled</> : 'Free charges stay on the conducting surfaces'}</text>
     <text x={left + width / 2 + 35} y={top - 65} textAnchor="middle" className="svg-label">{conceptual ? 'Ideal capacitor · schematic geometry' : `${area} cm² plate area`}</text>
   </svg>;
 }
@@ -144,10 +145,10 @@ export function NetworkScene({ cs, topology, source, results }: { cs: number[]; 
     <path d="M65 145V70H635V260H65v-90" className="wire" /><path d="M45 145h40m-30 15h20m-30 15h40" stroke="#d4dfeb" strokeWidth="3" /><text x="30" y="134" className="svg-positive">+</text><text x="30" y="197" className="svg-negative">−</text><text x="25" y="228" className="svg-label">{source} V</text>
     {topology === 'series' ? cs.map((c, j) => {
       const x = 155 + j * (420 / Math.max(1, cs.length - 1));
-      return <g key={j}><path d={`M${x - 9} 70h18`} stroke="#0c1627" strokeWidth="9" /><path d={`M${x - 9} 48v44m18-44v44`} stroke="#b4d2e9" strokeWidth="4" /><text x={x} y="119" textAnchor="middle" className="svg-label">C{j + 1} · {format(c, 'F')}</text><text x={x} y="146" textAnchor="middle" className="svg-positive">{format(results[j].q, 'C')}</text><text x={x} y="172" textAnchor="middle" className="svg-label">{format(results[j].v, 'V')}</text></g>;
+      return <g key={j}><path d={`M${x - 9} 70h18`} stroke="#0c1627" strokeWidth="9" /><path d={`M${x - 9} 48v44m18-44v44`} stroke="#b4d2e9" strokeWidth="4" /><text x={x} y="119" textAnchor="middle" className="svg-label">C<tspan baselineShift="sub" fontSize="9">{j + 1}</tspan> · {format(c, 'F')}</text><text x={x} y="146" textAnchor="middle" className="svg-positive">{format(results[j].q, 'C')}</text><text x={x} y="172" textAnchor="middle" className="svg-label">{format(results[j].v, 'V')}</text></g>;
     }) : cs.map((c, j) => {
       const x = 180 + j * (380 / Math.max(1, cs.length - 1));
-      return <g key={j}><path d={`M${x} 70v65m0 24v101`} className="wire" /><path d={`M${x - 24} 135h48m-48 24h48`} stroke="#b4d2e9" strokeWidth="4" /><text x={x} y="112" textAnchor="middle" className="svg-label">C{j + 1}</text><text x={x} y="191" textAnchor="middle" className="svg-label">{format(c, 'F')}</text><text x={x} y="216" textAnchor="middle" className="svg-positive">{format(results[j].q, 'C')}</text><text x={x} y="240" textAnchor="middle" className="svg-label">{format(results[j].v, 'V')}</text></g>;
+      return <g key={j}><path d={`M${x} 70v65m0 24v101`} className="wire" /><path d={`M${x - 24} 135h48m-48 24h48`} stroke="#b4d2e9" strokeWidth="4" /><text x={x} y="112" textAnchor="middle" className="svg-label">C<tspan baselineShift="sub" fontSize="9">{j + 1}</tspan></text><text x={x} y="191" textAnchor="middle" className="svg-label">{format(c, 'F')}</text><text x={x} y="216" textAnchor="middle" className="svg-positive">{format(results[j].q, 'C')}</text><text x={x} y="240" textAnchor="middle" className="svg-label">{format(results[j].v, 'V')}</text></g>;
     })}
     <text x="350" y="306" textAnchor="middle" className="svg-label">{topology === 'series' ? 'SAME CHARGE · voltage is shared' : 'SAME VOLTAGE · charge is shared'}</text>
   </svg>;
@@ -158,11 +159,11 @@ export function RCGraphs({ p, segments, time, inspect, hideCharge = false }: { p
   const [cursor, setCursor] = useState<number | null>(null); const [expanded, setExpanded] = useState(false);
   const container = useExpansion(expanded, setExpanded);
   const viewTime = cursor === null ? time : Math.min(cursor, end), state = sampleRC(p, segments, viewTime);
-  const left = 59, right = 536, top = 25, bottom = 168;
+  const left = 82, right = 536, top = 28, bottom = 168;
   const x = (t: number) => left + t / end * (right - left);
   const markers = hideCharge ? [] : [1, 2, 3, 5].map(k => k * tau);
   const curves = [
-    { key: 'q' as const, label: hideCharge ? 'Capacitor voltage Vc–t' : 'Charge Q–t', unit: hideCharge ? 'V' : 'C', max: hideCharge ? p.source : p.c * p.source, color: '#79dec7' },
+    { key: 'q' as const, label: hideCharge ? 'Capacitor voltage versus time' : 'Charge Q–t', unit: hideCharge ? 'V' : 'C', max: hideCharge ? p.source : p.c * p.source, color: '#79dec7' },
     { key: 'i' as const, label: 'Signed current I–t', unit: 'A', max: p.source / p.r, color: '#eab775' },
   ];
   return <section ref={container} className={`graphs-panel ${expanded ? 'graphs-expanded' : ''}`} aria-label="Synchronized RC graphs" role={expanded ? 'dialog' : undefined} aria-modal={expanded || undefined}><div className="section-row"><h3>Watch the response</h3><button className="icon-button" aria-label={expanded ? 'Close expanded graphs' : 'Expand graphs'} onClick={() => setExpanded(!expanded)}><Icon name="expand" /></button></div>
@@ -170,12 +171,14 @@ export function RCGraphs({ p, segments, time, inspect, hideCharge = false }: { p
       const signed = curve.key === 'i', minimum = signed ? -curve.max : 0;
       const y = (value: number) => bottom - (value - minimum) / (curve.max - minimum || 1) * (bottom - top);
       const value = (t: number, segment?: Segment) => { const s = segment ? sampleRC(p, [segment], t) : sampleRC(p, segments, t); return curve.key === 'q' ? hideCharge ? s.v : s.q : s.i; };
-      return <div className="graph" key={curve.key}><div className="graph-title"><span><i style={{ background: curve.color }} />{curve.label}</span><strong style={{ color: curve.color }}>{format(curve.key === 'q' ? hideCharge ? state.v : state.q : state.i, curve.unit)}</strong></div>
+      const axisScale = signed ? 1e3 : hideCharge ? 1 : 1e6;
+      return <div className="graph" key={curve.key}><div className="graph-title"><span><i style={{ background: curve.color }} />{hideCharge && curve.key === 'q' ? <>Capacitor voltage <InlineMath tex="V_C" />–t</> : curve.label}</span><strong style={{ color: curve.color }}>{format(curve.key === 'q' ? hideCharge ? state.v : state.q : state.i, curve.unit)}</strong></div>
         <svg viewBox="0 0 560 209" role="img" aria-label={`${curve.label}. Charging charge rises exponentially; discharge falls exponentially. Current jumps at switch events and decays toward zero. Cursor ${format(viewTime, 's')}.`} onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); const rect = e.currentTarget.getBoundingClientRect(); setCursor(Math.max(0, Math.min(end, ((e.clientX - rect.left) / rect.width * 560 - left) / (right - left) * end))); }} onPointerMove={e => { if (e.buttons) { const rect = e.currentTarget.getBoundingClientRect(); setCursor(Math.max(0, Math.min(end, ((e.clientX - rect.left) / rect.width * 560 - left) / (right - left) * end))); } }} style={{ touchAction: 'none' }}>
-          {[minimum, (minimum + curve.max) / 2, curve.max].map((v, k) => <g key={k}><line x1={left} x2={right} y1={y(v)} y2={y(v)} className="grid-line" /><text x={left - 8} y={y(v) + 4} textAnchor="end" className="tick">{format(v, curve.unit, 2)}</text></g>)}
+          <text x="3" y="15" className="tick">{signed ? 'I / mA' : hideCharge ? <>V<tspan baselineShift="sub" fontSize="10">C</tspan> / V</> : 'Q / µC'}</text>
+          {[minimum, (minimum + curve.max) / 2, curve.max].map((v, k) => <g key={k}><line x1={left} x2={right} y1={y(v)} y2={y(v)} className="grid-line" /><text x={left - 8} y={y(v) + 4} textAnchor="end" className="tick">{Number((v * axisScale).toPrecision(3))}</text></g>)}
           {markers.map((t, k) => <g key={k}><line x1={x(t)} x2={x(t)} y1={top} y2={bottom} className="tau-line" /><text x={x(t)} y={15} textAnchor="middle" className="tau-label">{[1, 2, 3, 5][k]}τ</text></g>)}
           {[0, end / 2, end].map(t => <text key={t} x={x(t)} y="188" textAnchor="middle" className="tick">{Number(t.toPrecision(3))}</text>)}
-          <text x="535" y="205" textAnchor="end" className="tick">time / s</text>
+          <text x="535" y="205" textAnchor="end" className="tick">t / s</text>
           {segments.map((s, k) => {
             const finish = segments[k + 1]?.start ?? end;
             const points = Array.from({ length: 101 }, (_, j) => { const t = s.start + (finish - s.start) * j / 100; return `${x(t)},${y(value(t, s))}`; }).join(' ');

@@ -31,7 +31,8 @@ test('capacitance, topology, independent state, prediction and answer checking',
   await cap.getByRole('button', { name: 'Check answer', exact: true }).click();
   await expect(cap.getByRole('status')).toContainText('Not yet');
   await cap.getByRole('button', { name: 'Hint', exact: true }).click();
-  await expect(cap.getByText('Use Q = CV. Convert µF to F first.')).toBeVisible();
+  await expect(cap.locator('.challenge-hint')).toContainText('Convert µF to F first.');
+  await expect(cap.locator('.challenge-hint annotation')).toHaveText('Q=CV');
   await cap.getByRole('button', { name: 'Reset tab', exact: true }).click();
   await expect(cap.getByRole('spinbutton', { name: 'Battery voltage', exact: true })).toHaveValue('12');
   expect(errors).toEqual([]);
@@ -66,7 +67,8 @@ test('RC playback, switch continuity, reset rules and complete virtual experimen
   await rc.getByRole('spinbutton', { name: 'Calculated capacitance' }).fill('120');
   await rc.getByRole('button', { name: 'Check experiment', exact: true }).click();
   await expect(rc.getByText(/Experiment complete/)).toContainText('Good agreement');
-  await expect(rc.getByText(/Reference C = 120 µF/)).toBeVisible();
+  await expect(rc.locator('.reference-answer')).toBeVisible();
+  await expect(rc.locator('.reference-answer annotation').first()).toHaveText(String.raw`C=120\,\mathrm{\mu F}`);
   await rc.getByRole('button', { name: 'Reset tab', exact: true }).click();
   await expect(rc.getByRole('definition').first()).toHaveText('0.00 s');
   await expect(rc.getByRole('spinbutton', { name: 'Measured time constant' })).toHaveValue('');

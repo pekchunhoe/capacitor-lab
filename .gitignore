@@ -4,6 +4,7 @@ test-results/
 playwright-report/
 *.local
 .npm-cache/
+.vercel/
 artifacts/
 .env
 .env.*
