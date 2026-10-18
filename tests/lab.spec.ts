@@ -102,8 +102,13 @@ for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [
   test(`responsive layout ${width} × ${height}`, async ({ page }) => {
     const errors: string[] = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
     await page.setViewportSize({ width, height }); await page.goto('/');
+    const names = ['Capacitance', 'RC Circuits', 'Dielectrics'];
+    await expect(page.getByRole('tab')).toHaveText(names);
     for (let i = 0; i < 3; i++) {
-      await tab(page, i); await expect(panel(page, i).getByRole('heading', { level: 2 })).toBeVisible();
+      const navigationTab = page.getByRole('tab', { name: names[i], exact: true });
+      await navigationTab.click(); await expect(navigationTab).toHaveAttribute('aria-selected', 'true');
+      await expect(panel(page, i).getByRole('heading', { level: 2 })).toBeVisible();
+      expect(await navigationTab.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await expect(panel(page, i).locator('.apparatus').first()).toBeVisible();
     }
