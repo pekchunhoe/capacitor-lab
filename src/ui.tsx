@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { format, sampleRC, timeConstant, type RCParameters, type Segment } from './physics';
 import { DisplayMath, InlineMath, MathText } from './math';
+import { activeCurrentPaths, CURRENT_PATHS, currentMarkers, currentVisualSpeed, pointOnCurrentPath } from './currentMotion';
 
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -83,7 +84,7 @@ function useExpansion(expanded: boolean, setExpanded: Dispatch<SetStateAction<bo
   return container;
 }
 export function useReducedMotion() {
-  const [reduced, setReduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const [reduced, setReduced] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
   useEffect(() => { const m = matchMedia('(prefers-reduced-motion: reduce)'); const changed = () => setReduced(m.matches); m.addEventListener('change', changed); return () => m.removeEventListener('change', changed); }, []);
   return reduced;
 }
@@ -126,10 +127,12 @@ export function PlateScene({ fraction = 0, er = 1, chargeFraction = 0.6, fieldSt
   </svg>;
 }
 
-export function RCCircuit({ p, v, i, charging, running, hiddenC = false }: { p: RCParameters; v: number; i: number; charging: boolean; running: boolean; hiddenC?: boolean }) {
+export function RCCircuit({ p, v, i, charging, running, time, phase, hiddenC = false }: { p: RCParameters; v: number; i: number; charging: boolean; running: boolean; time: number; phase: number; hiddenC?: boolean }) {
   const id = useId().replace(/:/g, '');
+  const reduced = useReducedMotion(), direction = Math.sign(i), visualSpeed = currentVisualSpeed(i);
+  const markerPhase = reduced ? 0 : phase;
   const fraction = p.source ? v / p.source : 0, n = Math.min(10, Math.round(fraction * 10));
-  return <svg className={`apparatus rc-scene ${running ? '' : 'still'}`} viewBox="0 0 700 310" role="img" aria-label={`RC circuit, ${charging ? 'charging' : 'discharging'}. Capacitor voltage ${format(v, 'V')}. Signed conventional current ${format(i, 'A')}. Charge does not cross the insulating gap.`} style={{ '--current-duration': `${Math.min(20, 0.7 / Math.max(Math.abs(i) / (p.source / p.r), .015))}s`, '--current-direction': charging ? 'normal' : 'reverse' } as React.CSSProperties}>
+  return <svg className={`apparatus rc-scene ${running ? '' : 'still'}`} viewBox="0 0 700 310" role="img" aria-label={`RC circuit, ${charging ? 'charging' : 'discharging'}. Capacitor voltage ${format(v, 'V')}. Signed conventional current ${format(i, 'A')}. ${direction > 0 ? 'Conventional current follows the charging reference.' : direction < 0 ? 'Conventional current flows opposite to the charging reference.' : 'Zero current; markers are stationary.'} Charge does not cross the insulating gap.`}>
     <defs><linearGradient id={`${id}-resistor`} x2="0" y2="1"><stop stopColor="#d5b28e" /><stop offset=".5" stopColor="#a98058" /><stop offset="1" stopColor="#745239" /></linearGradient></defs>
     <path d="M110 140V65h90M250 65h70m100 0h130v74m0 22v89H110v-85" className="wire" />
     <path d="M160 250V105h40" className={`wire ${charging ? 'inactive-wire' : ''}`} />
@@ -145,8 +148,18 @@ export function RCCircuit({ p, v, i, charging, running, hiddenC = false }: { p: 
     {Array.from({ length: n }, (_, k) => <g key={k}><text x={510 + k * 8} y="130" className="small-positive">+</text><text x={510 + k * 8} y="182" className="small-negative">−</text></g>)}
     <text x="550" y="211" textAnchor="middle" className="svg-label">C = {hiddenC ? 'unknown' : format(p.c, 'F')}</text>
     <text x="370" y="174" textAnchor="middle" className="instrument-value">{format(v, 'V')}</text><text x="370" y="197" textAnchor="middle" className="svg-label">CAPACITOR VOLTMETER</text>
-    {Math.abs(i) > 1e-12 && <path d={charging ? 'M265 65h55M420 65h130v65M550 190v60H110v-60M110 125V65h80' : 'M265 65h55M420 65h130v65M550 190v60H160V105h30'} className="current-flow" />}
-    <text x="350" y="285" textAnchor="middle" className="svg-label">Conventional current {charging ? 'clockwise →' : 'reverses ←'} · insulating gap carries no free current</text>
+    <g className="current-flow" data-current={i} data-time={time} data-phase={phase} data-direction={direction} data-speed={visualSpeed} data-motion-speed={running && !reduced ? visualSpeed : 0} data-reduced-motion={reduced} aria-hidden="true">
+      {activeCurrentPaths(charging).map(name => {
+        const path = CURRENT_PATHS[name], arrow = pointOnCurrentPath(name, path.length * .55);
+        return <g key={name} data-current-path={name}>
+          <path className="current-conductor" d={path.d} />
+          {currentMarkers(name, markerPhase).map((marker, index) => <circle key={index} className="current-particle" cx={marker.x} cy={marker.y} r="2.7" opacity={marker.opacity} data-distance={marker.distance} />)}
+          {direction !== 0 && <path className="current-direction-arrow" d="M-7 -4L5 0L-7 4" transform={`translate(${arrow.x} ${arrow.y}) rotate(${arrow.angle + (direction < 0 ? 180 : 0)})`} />}
+        </g>;
+      })}
+    </g>
+    <text x="350" y="285" textAnchor="middle" className="svg-label">Conventional current {direction > 0 ? 'clockwise →' : direction < 0 ? 'reverses ←' : 'zero · markers stationary'} · insulating gap carries no free current</text>
+    <text x="350" y="302" textAnchor="middle" className="svg-label">Marker speed shows current strength qualitatively.</text>
   </svg>;
 }
 

@@ -4,6 +4,7 @@ import { Challenges, Prediction, VirtualExperiment, modeItems, type Mode, type R
 import { Choices, EquationLesson, Experiment, Field, Icon, RCCircuit, RCGraphs, Readings } from './ui';
 import { DisplayMath, InlineMath, MathText, mathNumber, quantity } from './math';
 import { equations as eq } from './equations';
+import { currentPhase } from './currentMotion';
 
 const initial: RCParameters = { r: 1e4, c: 100e-6, source: 12 };
 function TimeConstantPanel({ tau, concealed }: { tau: number; concealed: boolean }) {
@@ -59,7 +60,7 @@ export default function RCLab({ active }: { active: boolean }) {
     <div className="lab-heading"><div><span className="eyebrow">2.2 · FOLLOW THE TRANSIENT</span><h2>The RC circuit laboratory</h2><p>Charging and discharging of capacitors</p></div><button className="reset-button" onClick={() => { const next = { ...initial, c: virtual ? 120e-6 : initial.c }; setP(next); restart(next); setSpeed('1'); setNotice('Reset to an initially uncharged capacitor.'); }}><Icon name="reset" size={17} />Reset tab</button></div>
     <Choices label="Learning mode" value={mode} items={modeItems} onChange={changeMode} />
     <div className="lab-grid rc-lab-grid"><div className="lab-main"><Experiment title={virtual ? 'A capacitance waiting to be measured' : 'Watch a circuit find its balance'} subtitle={virtual ? 'Use voltage readings and the stopwatch to discover the unknown C.' : 'A resistor sets the pace. A capacitor remembers its charge.'} badge={running ? `SIMULATION RUNNING · ${speed}×` : 'SIMULATION PAUSED · EXACT RC MODEL'}>
-      <RCCircuit p={p} v={s.v} i={s.i} charging={charging} running={running} hiddenC={virtual && !revealed} />
+      <RCCircuit p={p} v={s.v} i={s.i} charging={charging} running={running} time={time} phase={currentPhase(p, segments, time)} hiddenC={virtual && !revealed} />
       <div className="rc-actions"><button className={charging ? 'primary' : ''} onClick={() => switchCircuit(true)}><Icon name="spark" size={16} />Charge</button><button className={!charging ? 'primary' : ''} onClick={() => switchCircuit(false)}>Discharge</button><button onClick={() => setRunning(!running)} disabled={time >= trialEnd}><Icon name={running ? 'pause' : 'play'} size={16} />{running ? 'Pause' : 'Resume'}</button><button onClick={() => { restart(); setNotice(String.raw`Circuit reset: $Q=0$ and $V_C=0$ at $t=0$.`); }}><Icon name="reset" size={16} />Reset circuit</button></div>
       <Readings values={[{ label: 'Simulated time $t$', value: `${time.toFixed(2)} s` }, { label: 'Capacitor $V_C$', value: format(s.v, 'V') }, { label: virtual && !revealed ? 'Reference $C$' : 'Charge $Q$', value: virtual && !revealed ? 'Unknown' : format(s.q, 'C'), accent: '#7bdec9' }, { label: 'Signed current $I$', value: format(s.i, 'A'), accent: '#eab775' }]} />
     </Experiment>
