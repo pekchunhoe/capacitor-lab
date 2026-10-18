@@ -1,11 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { format, sampleRC, timeConstant, transition, type RCParameters, type Segment } from './physics';
 import { Challenges, Prediction, VirtualExperiment, modeItems, type Mode, type Reading } from './learning';
 import { Choices, EquationLesson, Experiment, Field, Icon, RCCircuit, RCGraphs, Readings } from './ui';
-import { DisplayMath, InlineMath, MathText, quantity } from './math';
+import { DisplayMath, InlineMath, MathText, mathNumber, quantity } from './math';
 import { equations as eq } from './equations';
 
 const initial: RCParameters = { r: 1e4, c: 100e-6, source: 12 };
+function TimeConstantPanel({ tau, concealed }: { tau: number; concealed: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const explanationId = useId();
+  const tex = String.raw`\tau=RC=${concealed ? '?' : `${mathNumber(tau)}\\,\\mathrm{s}`}`;
+  return <section className="time-constant" aria-label="Time constant">
+    <button type="button" className="time-constant-toggle" aria-label={`Time Constant: ${concealed ? 'unknown' : `${Number(tau.toPrecision(3))} s`}`} aria-expanded={expanded} aria-controls={explanationId} onClick={() => setExpanded(value => !value)}>
+      <span className="time-constant-title">Time Constant</span><InlineMath tex={tex} />
+      <svg className="time-constant-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d={expanded ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg>
+    </button>
+    <div id={explanationId} className="time-constant-explanation" hidden={!expanded}>
+      <span className="eyebrow">THE CIRCUIT’S NATURAL TIMESCALE</span><DisplayMath tex={tex} />
+      <p>The time constant determines how quickly a capacitor charges or discharges. A larger resistance or capacitance slows the process.</p>
+      <ul><li>At one time constant, an initially uncharged capacitor reaches approximately <b>63.2%</b> of its final charge.</li><li>During discharging, approximately <b>36.8%</b> of the initial charge remains after one time constant.</li><li>After five time constants, approximately <b>99.3%</b> of the charging change is complete.</li></ul>
+    </div>
+  </section>;
+}
 export default function RCLab({ active }: { active: boolean }) {
   const [p, setP] = useState(initial), [mode, setMode] = useState<Mode>('explore');
   const [segments, setSegments] = useState<Segment[]>([{ start: 0, initial: 0, target: 12 }]), [time, setTime] = useState(0), [running, setRunning] = useState(false), [speed, setSpeed] = useState('1');
@@ -42,12 +58,12 @@ export default function RCLab({ active }: { active: boolean }) {
   return <>
     <div className="lab-heading"><div><span className="eyebrow">2.2 · FOLLOW THE TRANSIENT</span><h2>The RC circuit laboratory</h2><p>Charging and discharging of capacitors</p></div><button className="reset-button" onClick={() => { const next = { ...initial, c: virtual ? 120e-6 : initial.c }; setP(next); restart(next); setSpeed('1'); setNotice('Reset to an initially uncharged capacitor.'); }}><Icon name="reset" size={17} />Reset tab</button></div>
     <Choices label="Learning mode" value={mode} items={modeItems} onChange={changeMode} />
-    <div className="lab-grid"><div className="lab-main"><Experiment title={virtual ? 'A capacitance waiting to be measured' : 'Watch a circuit find its balance'} subtitle={virtual ? 'Use voltage readings and the stopwatch to discover the unknown C.' : 'A resistor sets the pace. A capacitor remembers its charge.'} badge={running ? `SIMULATION RUNNING · ${speed}×` : 'SIMULATION PAUSED · EXACT RC MODEL'}>
+    <div className="lab-grid rc-lab-grid"><div className="lab-main"><Experiment title={virtual ? 'A capacitance waiting to be measured' : 'Watch a circuit find its balance'} subtitle={virtual ? 'Use voltage readings and the stopwatch to discover the unknown C.' : 'A resistor sets the pace. A capacitor remembers its charge.'} badge={running ? `SIMULATION RUNNING · ${speed}×` : 'SIMULATION PAUSED · EXACT RC MODEL'}>
       <RCCircuit p={p} v={s.v} i={s.i} charging={charging} running={running} hiddenC={virtual && !revealed} />
       <div className="rc-actions"><button className={charging ? 'primary' : ''} onClick={() => switchCircuit(true)}><Icon name="spark" size={16} />Charge</button><button className={!charging ? 'primary' : ''} onClick={() => switchCircuit(false)}>Discharge</button><button onClick={() => setRunning(!running)} disabled={time >= trialEnd}><Icon name={running ? 'pause' : 'play'} size={16} />{running ? 'Pause' : 'Resume'}</button><button onClick={() => { restart(); setNotice(String.raw`Circuit reset: $Q=0$ and $V_C=0$ at $t=0$.`); }}><Icon name="reset" size={16} />Reset circuit</button></div>
       <Readings values={[{ label: 'Simulated time $t$', value: `${time.toFixed(2)} s` }, { label: 'Capacitor $V_C$', value: format(s.v, 'V') }, { label: virtual && !revealed ? 'Reference $C$' : 'Charge $Q$', value: virtual && !revealed ? 'Unknown' : format(s.q, 'C'), accent: '#7bdec9' }, { label: 'Signed current $I$', value: format(s.i, 'A'), accent: '#eab775' }]} />
     </Experiment>
-      <div className="time-constant"><div><span className="eyebrow">THE CIRCUIT’S NATURAL TIMESCALE</span><DisplayMath tex={String.raw`\tau=RC=${virtual && !revealed ? '?' : quantity(tau, 's')}`} /></div><p>The time constant determines how quickly a capacitor charges or discharges. A larger resistance or capacitance slows the process. At one <InlineMath tex={String.raw`\tau`} />, a zero-start charge reaches <b>63.2%</b>; a discharge retains <b>36.8%</b>. At <InlineMath tex={String.raw`5\tau`} />, 99.3% of a charging change is complete.</p></div>
+      <TimeConstantPanel tau={tau} concealed={virtual && !revealed} />
       <RCGraphs key={trialId} p={p} segments={segments} time={time} hideCharge={virtual && !revealed} inspect={t => { setRunning(false); setTime(t); setSegments(segments.filter((seg, i) => i === 0 || seg.start <= t)); setNotice('Replay starts at the inspected time; later switch events were removed.'); }} />
       <EquationLesson sections={[
         { title: 'Charging', tex: eq.chargeQ, explanation: String.raw`For an initially uncharged capacitor, $Q$ grows towards the maximum charge $Q_0$; $t$ is elapsed charging time.` },

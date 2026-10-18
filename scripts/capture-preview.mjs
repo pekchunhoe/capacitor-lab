@@ -24,10 +24,13 @@ try {
       await page.screenshot({ path: fileURLToPath(new URL(`lab-${tab + 1}-${width}.png`, directory)), fullPage: true });
       const apparatus = await panel.locator('.experiment').boundingBox();
       const controls = await panel.locator('.control-panel').boundingBox();
-      if (width === 390 && (!apparatus || !controls || Math.abs(controls.y - apparatus.y - apparatus.height) > 25)) throw new Error('Mobile controls must immediately follow the apparatus.');
+      if (width === 390) {
+        const preceding = tab === 1 ? await panel.locator('.graphs-panel').boundingBox() : apparatus;
+        if (!preceding || !controls || Math.abs(controls.y - preceding.y - preceding.height) > 25) throw new Error('Mobile parameters must follow RC graphs, or the apparatus on the other tabs.');
+      }
     }
     if (errors.length) throw new Error(errors.join('\n'));
     await page.close();
   }
-  console.log('Six desktop/mobile screenshots captured; mobile apparatus/control proximity checked.');
+  console.log('Six desktop/mobile screenshots captured; mobile apparatus/graph/parameter ordering checked.');
 } finally { await browser.close(); }
