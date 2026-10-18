@@ -1,25 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { rcState, sampleRC, transition } from './physics';
-import { activeCurrentPaths, CURRENT_PATHS, CURRENT_STOP, MAX_CURRENT_SPEED, currentMarkers, currentPhase, currentVisualSpeed, pointOnCurrentPath, wrapDistance } from './currentMotion';
+import { activeCurrentPaths, CURRENT_PATHS, CURRENT_STOP, CURRENT_MARKER_SPACING, MAX_CURRENT_SPEED, currentMarkers, currentPhase, currentReference, currentVisualSpeed, pointOnCurrentPath, wrapDistance } from './currentMotion';
 
 const p = { r: 1e4, c: 100e-6, source: 12 };
 const charge = [{ start: 0, initial: 0, target: 12 }];
+const reference = currentReference(p);
 describe('current-driven visual phase', () => {
   it('has a fixed signed monotonic mapping with a bounded visual speed', () => {
     const currents = [0, CURRENT_STOP, 1e-8, 1e-6, 1e-4, .0012, .024];
-    const speeds = currents.map(currentVisualSpeed);
+    const speeds = currents.map(current => currentVisualSpeed(current, .024));
     expect(speeds[0]).toBe(0); expect(speeds[1]).toBe(0);
     for (let index = 2; index < speeds.length; index++) {
       expect(speeds[index]).toBeGreaterThan(speeds[index - 1]);
-      expect(speeds[index]).toBeLessThan(MAX_CURRENT_SPEED);
-      expect(currentVisualSpeed(-currents[index])).toBe(-speeds[index]);
+      expect(speeds[index]).toBeLessThanOrEqual(MAX_CURRENT_SPEED);
+      expect(currentVisualSpeed(-currents[index], .024)).toBe(-speeds[index]);
     }
   });
   it.each([['charging', charge], ['discharging', [{ start: 0, initial: 12, target: 0 }]]] as const)('keeps %s direction and slows throughout five time constants', (_, segments) => {
     const direction = Math.sign(sampleRC(p, [...segments], 0).i);
     let previousCurrent = Infinity, previousSpeed = Infinity, previousPhase = 0;
     for (let t = 0; t <= 5; t += .05) {
-      const current = sampleRC(p, [...segments], t).i, speed = currentVisualSpeed(current), phase = currentPhase(p, [...segments], t);
+      const current = sampleRC(p, [...segments], t).i, speed = currentVisualSpeed(current, reference), phase = currentPhase(p, [...segments], t);
       expect(Math.sign(current)).toBe(direction); expect(Math.sign(speed)).toBe(direction);
       expect(Math.abs(current)).toBeLessThanOrEqual(previousCurrent);
       expect(Math.abs(speed)).toBeLessThanOrEqual(previousSpeed);
@@ -33,7 +34,7 @@ describe('current-driven visual phase', () => {
     for (const t of [.01, .2, .6, .71, 1, 2, 5]) {
       const delta = 1e-5;
       const derivative = (currentPhase(p, segments, t + delta) - currentPhase(p, segments, t - delta)) / (2 * delta);
-      expect(derivative).toBeCloseTo(currentVisualSpeed(sampleRC(p, segments, t).i), 6);
+      expect(derivative).toBeCloseTo(currentVisualSpeed(sampleRC(p, segments, t).i, reference), 6);
     }
   });
   it('retains phase and common-wire marker positions across partial-charge switches', () => {
@@ -63,9 +64,41 @@ describe('current-driven visual phase', () => {
   });
   it('stops for zero current and stays stopped below the visual threshold', () => {
     const empty = [{ start: 0, initial: 0, target: 0 }];
-    expect(currentPhase(p, empty, 10)).toBe(0); expect(currentVisualSpeed(rcState(p, empty[0], 1).i)).toBe(0);
+    expect(currentPhase(p, empty, 10)).toBe(0); expect(currentVisualSpeed(rcState(p, empty[0], 1).i, reference)).toBe(0);
     expect(currentPhase(p, charge, 50)).toBe(currentPhase(p, charge, 100));
-    expect(currentVisualSpeed(sampleRC(p, charge, 50).i)).toBe(0);
+    expect(currentVisualSpeed(sampleRC(p, charge, 50).i, reference)).toBe(0);
+  });
+  it('makes the standard initial motion 4–6 times the previous calibrated baseline', () => {
+    const initialCurrent = sampleRC(p, charge, 0).i;
+    const previousInitialSpeed = 36 * initialCurrent / (.001 + initialCurrent);
+    const speedup = currentVisualSpeed(initialCurrent, reference) / previousInitialSpeed;
+    expect(speedup).toBeGreaterThanOrEqual(4); expect(speedup).toBeLessThanOrEqual(6);
+    // First 200 ms now travels about 16 SVG units, rather than about 4.
+    expect(currentPhase(p, charge, .2)).toBeGreaterThan(15);
+    expect(currentPhase(p, charge, .2)).toBeLessThan(17);
+  });
+  it('uses the fixed trial reference and decays by exactly the same fraction as current', () => {
+    const segments = transition(p, charge, 1, false);
+    const initialDischarge = sampleRC(p, segments, 1).i;
+    expect(Math.abs(currentVisualSpeed(initialDischarge, reference))).toBeCloseTo(MAX_CURRENT_SPEED * (1 - Math.exp(-1)), 12);
+    expect(Math.abs(currentVisualSpeed(initialDischarge, reference))).toBeLessThan(MAX_CURRENT_SPEED);
+    for (const interval of [charge, [{ start: 0, initial: 12, target: 0 }]]) {
+      const initial = sampleRC(p, interval, 0).i, speed = currentVisualSpeed(initial, reference);
+      for (const t of [.25, 1, 3, 5, 8]) {
+        const current = sampleRC(p, interval, t).i;
+        expect(currentVisualSpeed(current, reference) / speed).toBeCloseTo(current / initial, 12);
+      }
+    }
+    expect(Math.abs(currentVisualSpeed(sampleRC(p, charge, 8).i, reference))).toBeLessThan(.03);
+  });
+  it('integrates above-reference capped inputs consistently without changing engine current', () => {
+    const overReference = [{ start: 0, initial: 24, target: 0 }];
+    for (const t of [.1, .4, .8, 2]) {
+      const h = 1e-5, state = sampleRC(p, overReference, t);
+      const derivative = (currentPhase(p, overReference, t + h) - currentPhase(p, overReference, t - h)) / (2 * h);
+      expect(derivative).toBeCloseTo(currentVisualSpeed(state.i, reference), 6);
+      expect(Math.abs(currentVisualSpeed(state.i, reference))).toBeLessThanOrEqual(MAX_CURRENT_SPEED);
+    }
   });
 });
 
@@ -96,7 +129,7 @@ describe('conducting paths and signed wrapping', () => {
   it('bounds travel below half a marker spacing even with 5× playback and a capped frame stall', () => {
     const maxStep = MAX_CURRENT_SPEED * 5 * (.1 + 1 / 30);
     for (const path of Object.values(CURRENT_PATHS)) {
-      const spacing = path.length / Math.max(1, Math.floor(path.length / 48));
+      const spacing = path.length / Math.max(1, Math.floor(path.length / CURRENT_MARKER_SPACING));
       expect(maxStep).toBeLessThan(spacing / 2);
     }
   });

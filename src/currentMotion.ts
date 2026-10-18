@@ -3,12 +3,17 @@ import { rcState, type RCParameters, type Segment } from './physics';
 // Presentation units only: SVG units per simulated second, not carrier drift speed.
 // At 5× playback, even the existing 0.1 s frame-stall cap plus one pending
 // 30 Hz commit advances less than half a marker spacing (avoids strobing).
-export const MAX_CURRENT_SPEED = 36;
-export const CURRENT_SCALE = 1e-3;
+export const MAX_CURRENT_SPEED = 88;
+export const CURRENT_MARKER_SPACING = 120;
 export const CURRENT_STOP = 1e-9;
-export function currentVisualSpeed(current: number): number {
+// A fixed reference for the entire parameter trial, not the decaying current
+// or the charge at the latest switch. Partial-charge switches retain their scale.
+export function currentReference(p: RCParameters): number {
+  return Math.max(CURRENT_STOP, p.source / p.r);
+}
+export function currentVisualSpeed(current: number, referenceCurrent: number): number {
   const magnitude = Math.abs(current);
-  return magnitude <= CURRENT_STOP ? 0 : Math.sign(current) * MAX_CURRENT_SPEED * magnitude / (CURRENT_SCALE + magnitude);
+  return magnitude <= CURRENT_STOP ? 0 : Math.sign(current) * MAX_CURRENT_SPEED * Math.min(1, magnitude / referenceCurrent);
 }
 
 /** Exact integral of the visual speed mapping over existing engine intervals.
@@ -16,14 +21,19 @@ export function currentVisualSpeed(current: number): number {
  * Phase is a function of simulation history/time, with no independent animation clock.
  */
 export function currentPhase(p: RCParameters, segments: Segment[], time: number): number {
-  let phase = 0;
+  let phase = 0; const reference = currentReference(p);
   for (let index = 0; index < segments.length; index++) {
     const segment = segments[index], end = Math.min(time, segments[index + 1]?.start ?? time);
     if (segment.start >= time) break;
     if (end <= segment.start) continue;
     const startState = rcState(p, segment, segment.start), endState = rcState(p, segment, end);
     const start = Math.max(CURRENT_STOP, Math.abs(startState.i)), finish = Math.max(CURRENT_STOP, Math.abs(endState.i));
-    phase += Math.sign(startState.i) * MAX_CURRENT_SPEED * startState.tau * Math.log1p((start - finish) / (CURRENT_SCALE + finish));
+    // In supported trials |I| <= source/R, so displacement is the exact
+    // integral of linear normalized current. Also handle above-reference
+    // inputs consistently with the visual cap, without changing engine values.
+    const cappedTime = startState.tau * Math.log(Math.max(1, start / reference) / Math.max(1, finish / reference));
+    const linearTime = startState.tau * (Math.min(start, reference) - Math.min(finish, reference)) / reference;
+    phase += Math.sign(startState.i) * MAX_CURRENT_SPEED * (cappedTime + linearTime);
   }
   return phase;
 }
@@ -64,7 +74,7 @@ export function pointOnCurrentPath(name: CurrentPath, distance: number) {
   throw new Error('A current path requires a conducting segment.');
 }
 export function currentMarkers(name: CurrentPath, phase: number) {
-  const length = CURRENT_PATHS[name].length, count = Math.max(1, Math.floor(length / 48));
+  const length = CURRENT_PATHS[name].length, count = Math.max(1, Math.floor(length / CURRENT_MARKER_SPACING));
   return Array.from({ length: count }, (_, index) => {
     const distance = wrapDistance((index + .5) * length / count + phase, length);
     return { ...pointOnCurrentPath(name, distance), distance,

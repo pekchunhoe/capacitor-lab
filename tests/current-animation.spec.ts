@@ -13,7 +13,8 @@ async function snapshot(page: Page) {
     const flow = el.querySelector<SVGGElement>('.current-flow')!, scene = el.querySelector<SVGSVGElement>('.rc-scene')!;
     const number = (key: string) => Number(flow.dataset[key]);
     const graph = el.querySelectorAll('.graph svg')[1], cursor = graph.querySelector('circle')!;
-    return { time: number('time'), current: number('current'), phase: number('phase'), speed: number('speed'), motionSpeed: number('motionSpeed'), direction: number('direction'),
+    const matrix = scene.getScreenCTM()!;
+    return { time: number('time'), current: number('current'), phase: number('phase'), speed: number('speed'), motionSpeed: number('motionSpeed'), direction: number('direction'), svgScale: Math.hypot(matrix.a, matrix.b),
       reduced: flow.dataset.reducedMotion, animations: scene.getAnimations({ subtree: true }).length,
       readouts: [...el.querySelectorAll('.readings dd')].map(node => node.textContent),
       graphCurrent: el.querySelectorAll('.graph-title strong')[1].textContent,
@@ -32,6 +33,7 @@ type Snapshot = Awaited<ReturnType<typeof snapshot>>;
 function checkSync(state: Snapshot, direction: number, peakCurrent = .0012) {
   expect(state.animations).toBe(0); expect(state.direction).toBe(direction);
   expect(Math.sign(state.current)).toBe(direction); expect(Math.sign(state.speed)).toBe(direction);
+  expect(state.speed).toBeCloseTo(88 * state.current / peakCurrent, 9);
   expect(state.graphCurrent).toBe(state.readouts[3]);
   expect(Math.sign(parseFloat(state.readouts[3]!))).toBe(direction);
   expect(state.graphCursor.x).toBeCloseTo(82 + state.time / state.graphTimeEnd * 454, 7);
@@ -71,11 +73,17 @@ for (const [width, height] of [[320, 640], [390, 844], [834, 1194], [1194, 834],
     await setup(page, width, height);
     await panel(page).getByRole('button', { name: 'Charge', exact: true }).click();
     const samples = [await snapshot(page)]; let wraps = 0;
+    expect(samples[0].speed).toBe(88);
+    expect(samples[0].speed * samples[0].svgScale).toBeGreaterThan(35);
     for (let step = 1; step <= 24; step++) {
       await page.clock.runFor(250); const state = await snapshot(page);
       checkSync(state, 1); wraps += movement(samples.at(-1)!, state, 1);
       expect(state.current).toBeCloseTo(.0012 * Math.exp(-state.time), 12);
       samples.push(state);
+      if (step === 1) {
+        const measuredCssRate = (state.phase - samples[0].phase) / (state.time - samples[0].time) * state.svgScale;
+        expect(measuredCssRate).toBeGreaterThan(30);
+      }
       if ([1, 4, 12, 20].includes(step)) await panel(page).locator('.experiment').screenshot({ path: `artifacts/rc-current/charge-${width}-${step}.png` });
     }
     expect(samples.at(-1)!.time).toBeGreaterThan(5);
@@ -96,12 +104,17 @@ test('fully charged discharge uses the reverse shunt loop and slows for five tim
   expect(initial.readouts.slice(1, 3)).toEqual(before.readouts.slice(1, 3));
   expect(initial.phase).toBeCloseTo(before.phase, 12);
   expect(initial.paths.map(path => path.name)).toEqual(['upper', 'lower', 'shunt']);
+  expect(Math.abs(initial.speed)).toBeGreaterThan(87);
   const samples = [initial]; let wraps = 0;
   for (let step = 1; step <= 24; step++) {
     await page.clock.runFor(250); const state = await snapshot(page);
     checkSync(state, -1); wraps += movement(samples.at(-1)!, state, -1);
     expect(state.current).toBeCloseTo(initial.current * Math.exp(-(state.time - initial.time)), 12);
     samples.push(state);
+    if (step === 1) {
+      const measuredCssRate = Math.abs((state.phase - initial.phase) / (state.time - initial.time)) * state.svgScale;
+      expect(measuredCssRate).toBeGreaterThan(35);
+    }
     if ([1, 4, 12, 20].includes(step)) await rc.locator('.experiment').screenshot({ path: `artifacts/rc-current/discharge-390-${step}.png` });
   }
   expect(wraps).toBeGreaterThan(0);

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { format, sampleRC, timeConstant, type RCParameters, type Segment } from './physics';
 import { DisplayMath, InlineMath, MathText } from './math';
-import { activeCurrentPaths, CURRENT_PATHS, currentMarkers, currentVisualSpeed, pointOnCurrentPath } from './currentMotion';
+import { activeCurrentPaths, CURRENT_PATHS, currentMarkers, currentReference, currentVisualSpeed, pointOnCurrentPath } from './currentMotion';
 
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, ReactNode> = {
@@ -129,7 +129,7 @@ export function PlateScene({ fraction = 0, er = 1, chargeFraction = 0.6, fieldSt
 
 export function RCCircuit({ p, v, i, charging, running, time, phase, hiddenC = false }: { p: RCParameters; v: number; i: number; charging: boolean; running: boolean; time: number; phase: number; hiddenC?: boolean }) {
   const id = useId().replace(/:/g, '');
-  const reduced = useReducedMotion(), direction = Math.sign(i), visualSpeed = currentVisualSpeed(i);
+  const reduced = useReducedMotion(), direction = Math.sign(i), visualSpeed = currentVisualSpeed(i, currentReference(p));
   const markerPhase = reduced ? 0 : phase;
   const fraction = p.source ? v / p.source : 0, n = Math.min(10, Math.round(fraction * 10));
   return <svg className={`apparatus rc-scene ${running ? '' : 'still'}`} viewBox="0 0 700 310" role="img" aria-label={`RC circuit, ${charging ? 'charging' : 'discharging'}. Capacitor voltage ${format(v, 'V')}. Signed conventional current ${format(i, 'A')}. ${direction > 0 ? 'Conventional current follows the charging reference.' : direction < 0 ? 'Conventional current flows opposite to the charging reference.' : 'Zero current; markers are stationary.'} Charge does not cross the insulating gap.`}>
@@ -159,7 +159,7 @@ export function RCCircuit({ p, v, i, charging, running, time, phase, hiddenC = f
       })}
     </g>
     <text x="350" y="285" textAnchor="middle" className="svg-label">Conventional current {direction > 0 ? 'clockwise →' : direction < 0 ? 'reverses ←' : 'zero · markers stationary'} · insulating gap carries no free current</text>
-    <text x="350" y="302" textAnchor="middle" className="svg-label">Marker speed shows current strength qualitatively.</text>
+    <text x="350" y="302" textAnchor="middle" className="svg-label">Marker speed shows current relative to the circuit’s maximum.</text>
   </svg>;
 }
 
