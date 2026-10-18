@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { DisplayMath, InlineMath, MathText, mathNumber, quantity, renderMath } from './math';
 import { equations } from './equations';
 import { question } from './learning';
+import RCLab from './RCLab';
 
 describe('textbook notation and accessible rendering', () => {
   it.each(Object.entries(equations))('renders %s as visual math and accessible MathML', (_, tex) => {
@@ -14,8 +15,8 @@ describe('textbook notation and accessible rendering', () => {
   it('uses mathematical fractions, superscripts, subscripts and Greek letters', () => {
     expect(renderMath(equations.capacitance)).toContain('<mfrac>');
     expect(renderMath(equations.energyCV)).toContain('<msup>');
-    expect(renderMath(equations.rcGeneral)).toContain('<msub>');
-    expect(renderMath(equations.rcGeneral)).toContain('<msup>');
+    expect(renderMath(equations.chargeQ)).toContain('<msub>');
+    expect(renderMath(equations.dischargeQ)).toContain('<msup>');
     expect(renderMath(equations.tau)).toContain('τ');
     expect(renderMath(equations.permittivity)).toContain('ε');
   });
@@ -34,6 +35,35 @@ describe('textbook notation and accessible rendering', () => {
     expect(renderMath(quantity(2.88e-8, 'J'))).not.toBeNull();
     expect(quantity(NaN, 'F')).toBe(String.raw`\text{unavailable}`);
     expect(quantity(1, '<script>')).toBe(String.raw`\text{unavailable}`);
+  });
+});
+
+describe('prescribed charge equations and learning explanations', () => {
+  it('uses the exact charging, discharging and time constant notation', () => {
+    expect(equations.chargeQ).toBe(String.raw`Q=Q_0\left(1-e^{-\frac{t}{RC}}\right)`);
+    expect(equations.dischargeQ).toBe(String.raw`Q=Q_0e^{-\frac{t}{RC}}`);
+    expect(equations.tau).toBe(String.raw`\tau=RC`);
+  });
+  it('renders accessible sections and initial conditions without advanced responses', () => {
+    const html = renderToStaticMarkup(<RCLab active={false} />);
+    for (const title of ['Charging', 'Discharging', 'Time Constant']) expect(html).toContain(`aria-label="${title}"`);
+    for (const tex of [equations.chargeQ, equations.dischargeQ, equations.tau]) expect(html).toContain(tex);
+    expect(html).toContain('initially uncharged capacitor');
+    expect(html).toContain('does not apply unchanged when recharging a partially charged capacitor');
+    expect(html).toContain('initial charge in the discharging equation');
+    expect(html).toContain('Symbols &amp; units');
+    expect(html).toContain('<math');
+    expect(html).not.toMatch(/V_\\infty|t_0|V_\{C,0\}|SP025|general interval response/);
+  });
+  it('keeps RC challenge solutions within charge and time constant equations', () => {
+    for (let index = 0; index < 4; index++) {
+      const charging = question(1, 'Medium', index), discharging = question(1, 'Hard', index);
+      expect(charging.solution).toContain(equations.chargeQ);
+      expect(discharging.solution).toContain(equations.dischargeQ);
+      expect(discharging.unit).toBe('µC');
+      expect(discharging.answer / (100e-6 * (6 + index * 2))).toBeCloseTo(Math.exp(-2), 12);
+      expect(charging.answer + discharging.answer).toBeCloseTo(100e-6 * (6 + index * 2), 12);
+    }
   });
 });
 

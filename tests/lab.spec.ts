@@ -100,6 +100,23 @@ test('dielectric preserves isolated charge and responds to geometry and boundary
   await expect(d.getByRole('spinbutton', { name: 'Plate separation', exact: true })).toHaveValue('1.2');
   await expect(d.getByRole('alert')).toHaveCount(0);
 });
+
+test('RC challenges score charging and discharging charge using the displayed syllabus equations', async ({ page }) => {
+  await page.goto('/'); await tab(page, 1); const rc = panel(page, 1);
+  await rc.getByRole('button', { name: 'Challenges', exact: true }).click();
+  for (const [difficulty, answer, equation] of [
+    ['Medium', '518.799', String.raw`Q=Q_0\left(1-e^{-\frac{t}{RC}}\right)`],
+    ['Hard', '81.2012', String.raw`Q=Q_0e^{-\frac{t}{RC}}`],
+  ]) {
+    await rc.getByRole('button', { name: difficulty, exact: true }).click();
+    await rc.getByRole('spinbutton', { name: 'Challenge answer' }).fill(answer);
+    await rc.getByRole('button', { name: 'Check answer', exact: true }).click();
+    await expect(rc.getByRole('status')).toContainText('Correct.');
+    await rc.getByRole('button', { name: 'Worked solution', exact: true }).click();
+    await expect(rc.locator('.worked-solution annotation').first()).toHaveText(equation);
+    await expect(rc.locator('.worked-solution math msub').first()).toBeAttached();
+  }
+});
 for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [768, 1024], [1440, 1000]]) {
   test(`responsive layout ${width} × ${height}`, async ({ page }) => {
     const errors: string[] = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });

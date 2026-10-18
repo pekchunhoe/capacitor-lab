@@ -63,6 +63,18 @@ describe('exact RC trajectories', () => {
       expect(p.sampleRC(next, fresh, p.timeConstant(next.r, next.c)).v / next.source).toBeCloseTo(1 - Math.exp(-1), 12);
     }
   });
+  it('continues a partial-charge recharge from its actual state over the next interval', () => {
+    let segments = p.transition(params, start, .4, false);
+    const beforeRecharge = p.sampleRC(params, segments, .7);
+    segments = p.transition(params, segments, .7, true);
+    const afterOneTau = p.sampleRC(params, segments, 1.7);
+    const expectedVoltage = params.source + (beforeRecharge.v - params.source) * Math.exp(-1);
+    expect(afterOneTau.v).toBeCloseTo(expectedVoltage, 12);
+    expect(afterOneTau.q).toBeCloseTo(params.c * expectedVoltage, 12);
+    expect(afterOneTau.i).toBeCloseTo((params.source - expectedVoltage) / params.r, 12);
+    // The zero-start teaching equation must not replace this switched trajectory.
+    expect(afterOneTau.v).toBeGreaterThan(params.source * (1 - Math.exp(-1)));
+  });
   it('does not lose tiny-time charge growth', () => expect(p.sampleRC(params, start, 1e-17).q).toBeGreaterThan(0));
 });
 describe('geometry, dielectrics and boundary conditions', () => {

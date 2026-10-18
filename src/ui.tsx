@@ -43,6 +43,16 @@ export function Readings({ values }: { values: { label: string; value: string; a
 export function Equation({ children, note, symbols }: { children: string | readonly string[]; note: ReactNode; symbols?: string }) {
   return <section className="equation"><div className="eyebrow">THE PHYSICS BEHIND IT</div><div className="formula">{(typeof children === 'string' ? [children] : children).map((tex, i) => <DisplayMath key={i} tex={tex} />)}</div><p>{note}</p>{symbols && <details className="equation-explanation"><summary>Symbols & units</summary><p><MathText>{symbols}</MathText></p></details>}</section>;
 }
+export function EquationLesson({ sections, note, symbols }: { sections: { title: string; tex: string; explanation: string }[]; note: string; symbols: string }) {
+  return <section className="equation equation-lesson" aria-label="The physics behind it">
+    <div className="eyebrow">THE PHYSICS BEHIND IT</div>
+    {sections.map(({ title, tex, explanation }) => <section className="equation-section" key={title} aria-label={title}>
+      <h3>{title}</h3><DisplayMath tex={tex} /><p><MathText>{explanation}</MathText></p>
+    </section>)}
+    <p><MathText>{note}</MathText></p>
+    <details className="equation-explanation"><summary>Symbols & units</summary><p><MathText>{symbols}</MathText></p></details>
+  </section>;
+}
 export function Experiment({ title, subtitle, badge, children }: { title: string; subtitle: string; badge: string; children: ReactNode }) {
   const [expanded, setExpanded] = useState(false);
   const container = useExpansion(expanded, setExpanded);
