@@ -30,7 +30,7 @@ export default function DielectricLab() {
   const connected = isolatedQ === null;
   const reset = () => { setEr(4); setArea(200); setGap(1.2); setSource(12); setInsertion(0); setIsolatedQ(null); setOverlays(true); setMaterial('Custom'); setControlKey(k => k + 1); };
   return <>
-    <div className="lab-heading"><div><span className="eyebrow">2.3 · MATTER IN THE FIELD</span><h2>The dielectric explorer</h2><p>Capacitors with dielectrics</p></div><button className="reset-button" onClick={reset}><Icon name="reset" size={17} />Reset tab</button></div>
+    <div className="lab-heading"><div><span className="eyebrow">MATTER IN THE FIELD</span><h2>The dielectric explorer</h2><p>Capacitors with dielectrics</p></div><button className="reset-button" onClick={reset}><Icon name="reset" size={17} />Reset tab</button></div>
     <Choices label="Learning mode" value={mode} items={modeItems} onChange={setMode} />
     <div className="lab-grid"><div className="lab-main"><Experiment title="Change the space between" subtitle="Insert an insulator. Discover what the electrical boundary keeps constant." badge={connected ? 'BATTERY CONNECTED · FIXED VOLTAGE' : 'BATTERY DISCONNECTED · FIXED FREE CHARGE'}>
       <PlateScene fraction={fraction} er={er} chargeFraction={s.q / 8e-9} fieldStrength={s.field / 10000} showCharges={overlays} showField={overlays} connected={connected} area={area} gap={gap} voltage={source} animate={!reduced} />

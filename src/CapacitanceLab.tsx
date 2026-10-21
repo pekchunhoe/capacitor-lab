@@ -13,7 +13,7 @@ export default function CapacitanceLab() {
   const q = charge(c * 1e-6, v), u = energy(c * 1e-6, v), n = network(cs.map(x => x * 1e-6), v, topology);
   const reset = () => { setC(100); setV(12); setCs([2, 3]); setTopology('series'); setCompare(false); setCharges(true); setField(true); setSpeed('1'); setAnimate(true); setKind('plates'); setMode('explore'); setControlKey(k => k + 1); };
   return <>
-    <div className="lab-heading"><div><span className="eyebrow">2.1 · EXPLORE THE FUNDAMENTALS</span><h2>Capacitance & capacitors</h2><p>Capacitance and capacitors in series and parallel</p></div><button className="reset-button" onClick={reset}><Icon name="reset" size={17} />Reset tab</button></div>
+    <div className="lab-heading"><div><span className="eyebrow">EXPLORE THE FUNDAMENTALS</span><h2>Capacitance & capacitors</h2><p>Capacitance and capacitors in series and parallel</p></div><button className="reset-button" onClick={reset}><Icon name="reset" size={17} />Reset tab</button></div>
     <Choices label="Learning mode" value={mode} items={modeItems} onChange={setMode} />
     <div className="lab-grid"><div className="lab-main">
       <Choices label="Capacitance experiment" value={kind} items={[{ value: 'plates', label: 'Stored charge' }, { value: 'network', label: 'Circuit builder' }, { value: 'energy', label: 'Stored energy' }]} onChange={setKind} />

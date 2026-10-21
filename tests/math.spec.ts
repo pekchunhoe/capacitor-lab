@@ -1,6 +1,10 @@
 import { test, expect, devices, type Page } from '@playwright/test';
 
 async function checkMath(page: Page) {
+  // Curriculum labels must stay absent in every tab and learning mode.
+  await expect(page.locator('body')).not.toContainText(/\b(?:semester|chapter)\s+\d+|SP025/i);
+  const labels = await page.locator('.eyebrow:visible, .chapter-mark:visible, .challenge h3:visible').allTextContents();
+  for (const label of labels) expect(label).not.toMatch(/^\s*\d+(?:\.\d+)*\b|\b(?:experiment|challenge)\s+\d+/i);
   await expect(page.locator('.math-fallback, .katex-error')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const raw = await page.evaluate(() => {
@@ -9,7 +13,7 @@ async function checkMath(page: Page) {
     while (walker.nextNode()) {
       const node = walker.currentNode, parent = node.parentElement;
       if (!parent || parent.closest('.katex,script,style,[hidden]') || !parent.getClientRects().length) continue;
-      if (/\\(?:frac|varepsilon|tau|mathrm)|e\^|\bexp\(|Vinitial|Ceq|SP025|\$/.test(node.textContent ?? '')) problems.push(node.textContent!);
+      if (/\\(?:frac|varepsilon|tau|mathrm)|e\^|\bexp\(|Vinitial|Ceq|SP025|\b(?:semester|chapter|experiment|challenge)\s+\d+|\$/i.test(node.textContent ?? '')) problems.push(node.textContent!);
     }
     return problems;
   });
@@ -70,9 +74,14 @@ for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     await page.setViewportSize({ width, height }); await page.goto('/');
+    await expect(page).toHaveTitle('Capacitor Lab');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', 'An interactive physics laboratory: capacitance, RC circuits and dielectrics.');
+    await expect(page.getByRole('tablist', { name: 'Laboratory topics' }).getByRole('tab')).toHaveText(['Capacitance', 'RC Circuits', 'Dielectrics']);
+    await expect(page.locator('.chapter-intro p')).toHaveText('Capacitors and Dielectrics');
     for (const [i, name] of ['Capacitance', 'RC Circuits', 'Dielectrics'].entries()) {
       await page.getByRole('tab', { name, exact: true }).click();
       const panel = page.locator(`#panel-${i}`);
+      await expect(panel.locator('.lab-heading .eyebrow')).toHaveText(['EXPLORE THE FUNDAMENTALS', 'FOLLOW THE TRANSIENT', 'MATTER IN THE FIELD'][i]);
       await expect(panel.locator('.equation math mfrac').first()).toBeAttached();
       await panel.locator('.equation-explanation summary').click();
       await panel.locator('details.model-notes:not(.equation-library) summary, details.learning-summary summary').evaluateAll(nodes => nodes.forEach(summary => (summary.parentElement as HTMLDetailsElement).open = true));
@@ -145,7 +154,7 @@ for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [
       }
       await panel.getByRole('button', { name: 'Virtual experiment', exact: true }).click();
       if (i === 1) {
-        await expect(panel.locator('.virtual-lab .eyebrow')).toHaveText('EXPERIMENT 1');
+        await expect(panel.locator('.virtual-lab .eyebrow')).toHaveText('VIRTUAL EXPERIMENT');
         await checkMath(page);
         const graphSymbol = panel.locator('.graph-title .inline-math');
         await expect(graphSymbol.locator('annotation')).toHaveText('V_C');

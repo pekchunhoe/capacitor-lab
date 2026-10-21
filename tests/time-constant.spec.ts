@@ -114,7 +114,7 @@ test('charging and discharging continue with synchronized graphs while toggling'
   expect(await panel.locator('.readings dd').allTextContents()).toEqual(frozen);
 });
 
-test('touch toggles preserve Experiment 1 measurements in tablet portrait and landscape', async ({ browser }) => {
+test('touch toggles preserve virtual experiment measurements in tablet portrait and landscape', async ({ browser }) => {
   const context = await browser.newContext({ ...devices['iPad Pro 11'], baseURL: 'http://127.0.0.1:5173' });
   try {
     const page = await context.newPage(); await openRC(page); const panel = rc(page), button = toggle(page);
